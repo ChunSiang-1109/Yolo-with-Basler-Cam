@@ -17,10 +17,11 @@
 
 3.``Run flask server using SocketIo with threading. SocketIO enables real-time communication between clients and servers.``
 
-4.``For frontend UI, 'connectSocket' is defined to call the flask API and the console output will response "Frontend SocketIO connected!" when clicking the 'Start' button. ``
+4.``For frontend UI, 'connectSocket' is defined to call the flask API and the console output will response "Frontend SocketIO connected!" when clicking the 'Start' 
+  button. ``
 
 5.``Once the 'Start' button clicked, the video streaming will display on UI``
 
-6.``'Stop' button is to stop the video streaming and disconnect with the flask API.``
+6.`` 'Stop' button is to stop the video streaming and disconnect with the flask API.``
 
-7.``'CapturueOneImage`` is to capture the current video streaming image and then display at the right frame of UI.``
+7.`` 'CapturueOneImage`` is to capture the current video streaming image and then display at the right frame of UI.``
