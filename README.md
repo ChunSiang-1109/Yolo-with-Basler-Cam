@@ -24,4 +24,4 @@
 
 6.`` 'Stop' button is to stop the video streaming and disconnect with the flask API.``
 
-7.`` 'CapturueOneImage`` is to capture the current video streaming image and then display at the right frame of UI.``
+7.`` 'CapturueOneImage` is to capture the current video streaming image and then display at the right frame of UI.``
