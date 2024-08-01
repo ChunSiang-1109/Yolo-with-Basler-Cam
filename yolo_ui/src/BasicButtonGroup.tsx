@@ -13,7 +13,7 @@ export default function BasicButtonGroup(
       socket.emit('stop_stream');
       // Emit event to stop the stream
     }
-    setButtonHide1(false); // Hide the video
+    setButtonHide1(true); // Hide the video
     setButtonRunStatus1(true); 
     setButtonCapOne(null);
   }
