@@ -18,8 +18,6 @@ import base64
 
 #to control the detection of the camera
 detection_running= False
-stream_running=False
-capture_running=False
 mutex_lock = Lock()
 
 # Stop event for stopping the detection loop
@@ -66,8 +64,7 @@ def capture_and_store(camera, converter, storage, index, stop_event):
     
 def video_stream():
     print("yolo_stream_detection")
-    global start_time, frame_count, detection_running,stop_event, stream_running, capture_running, mutex_lock
-    # why this while loop here? then you will initialize the variable everytime? again??? control the detecion start while program start?
+    global start_time, frame_count, detection_running,stop_event, mutex_lock
 
     # Initialize the Basler camera interface
     tl_factory = pylon.TlFactory.GetInstance()
@@ -91,7 +88,6 @@ def video_stream():
 
     image_storage = [None]
     stop_event.clear()
-    # print(capture_running,stream_running)
 
     thread1 = threading.Thread(target=capture_and_store, args=(camera1, converter, image_storage, 0, stop_event))
     thread1.start()
@@ -105,33 +101,19 @@ def video_stream():
     detection_result = {class_id: 0 for class_id in name}
     list = []  
 
-    while True:
-        if not detection_running:
-            # time.sleep(1)
-            continue
+    try:
+        while True:
+            if not detection_running:
+                # time.sleep(1)
+                continue
 
-        try:
+        # try:
             if image_storage[0] is not None:
-                results = []
-                stitched_image = ""
-                if stream_running or capture_running:
-                    stitched_image = image_storage[0].copy()
-                    results = det_model.track(stitched_image, persist=True)
-
-                print(f"stream: {stream_running} capture: {capture_running}")
-
-                # if stream_running:
-                #     stitched_image = image_storage[0].copy()
-                #     results = det_model.track(stitched_image, persist=True)
-                # elif stream_running == False and capture_running == True:
-                #     stitched_image = image_storage[0].copy()
-                #     results = det_model.track(stitched_image, persist=True)
-                #     capture_running = False
-                
+                stitched_image = image_storage[0].copy()
+                results = det_model.track(stitched_image, persist=True)
+           
                 for result in results:
                     plot_image = result.plot()
-                    # if plot_image is not None:
-                    #     cv2.imshow('Object Detection', plot_image)
                     
                     # Increment class counts
                     for box in result.boxes:
@@ -144,14 +126,12 @@ def video_stream():
 
                             if pred_class in detection_result.keys():
                                 detection_result[pred_class] += 1
-                    
-                # print(detection_result)
+                print(detection_result)
                 frame_count += 1
                 total_time = time.time() - prev_time
 
-                # if total_time >= 1.0:
-                if stream_running or capture_running:
-                    fps = frame_count / total_time
+                if total_time >= 1.0:
+                    # fps = frame_count / total_time
                     # print(f"FPS: {fps:.2f}")
                     frame_count = 0
                     prev_time = time.time()
@@ -161,32 +141,19 @@ def video_stream():
                     frame_data = base64.b64encode(buffer).decode('utf-8')
 
                     # Send frame over WebSocket
-                    socketio.emit('video_frame',{'frame':frame_data})
-                    socketio.emit('detection_result',{'result':detection_result})
-
-                if capture_running:
-                    capture_running = False
-
-                # BEH: the structure of the code is weird now.
-                # don't know why the following part is running
-                # dont't know why the finnaly keep running
+                    socketio.emit('video_frame',{'result':detection_result, 'frame':frame_data})
 
                 if stop_event.is_set():
-                    print("stop event set")
                     socketio.emit('clear_display')
                     break
-        except:
-            print("something is wrong")
+        detection_running=False
+    finally:
+        stop_event.set()
+        camera1.StopGrabbing()
+        camera1.Close()
+        cv2.destroyAllWindows()
+        thread1.join()
 
-    print("!!! exit of While Loop")
-    stop_event.set()
-    camera1.StopGrabbing()
-    camera1.Close()
-    cv2.destroyAllWindows()
-    thread1.join()
-    # detection_running=True
-    # capture_running=True
-    # print(capture_running,stream_running,detection_running)
     
 #app instance
 app=Flask(__name__)
@@ -195,47 +162,47 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 @socketio.on('connect')
 def handle_connect():
-    print("Client connected")
     global detection_running, mutex_lock
     mutex_lock.acquire()
     detection_running = False
     mutex_lock.release()
+    print("Client connected")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print("Client disconnected")
     global detection_running, stop_event, mutex_lock
     mutex_lock.acquire()
     detection_running = False
     stop_event.set()
     socketio.emit('clear_display')
     mutex_lock.release()
+    print("Client disconnected")
 
 @socketio.on('stop_stream')
 def handle_stop_stream():
-    global stream_running, detection_running, capture_running, mutex_lock
+    global detection_running, mutex_lock
+    print("stop_stream")
     mutex_lock.acquire()
-    detection_running = True
-    stream_running = False
-    capture_running = False
+    detection_running = False
     mutex_lock.release()
+    socketio.emit('start_capture')
+    print("stop_stream")
 
 @socketio.on('start_detection')
 def handle_start_detection():
-    global detection_running, stream_running, capture_running, mutex_lock
+    global detection_running, mutex_lock
     mutex_lock.acquire()
     detection_running = True
-    stream_running = True
-    capture_running = True
     mutex_lock.release()
+    print("start_detection")
 
 @socketio.on('start_capture')
 def handle_start_capture():
-    global capture_running,detection_running, mutex_lock
+    global detection_running, mutex_lock
     mutex_lock.acquire()
-    capture_running = True
     detection_running = True
     mutex_lock.release()
+    print("start_capture")
 
 @socketio.on('stop_detection')
 def handle_stop_detection():
@@ -245,6 +212,7 @@ def handle_stop_detection():
     stop_event.set()
     socketio.emit('clear_display')
     mutex_lock.release()
+    print("stop_detection")
 
 
 if __name__ == "__main__":

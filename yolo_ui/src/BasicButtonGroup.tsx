@@ -5,8 +5,8 @@ import { Socket } from 'socket.io-client';
 
 
 export default function BasicButtonGroup(
-  { buttonStatus1, setButtonStatus1, setButtonRunStatus1  ,buttonCapOne, setButtonCapOne, socket ,setReset,setButtonHide1}:
-    { buttonStatus1: boolean, setButtonStatus1: Function,setButtonRunStatus1:Function,  buttonCapOne: String|null, setButtonCapOne: Function, socket: Socket | null ,setReset:Function,setButtonHide1:Function}){
+  { buttonStatus1, setButtonStatus1, buttonCapOne, setButtonCapOne, socket ,setReset,setButtonHide1}:
+    { buttonStatus1: boolean, setButtonStatus1: Function, buttonCapOne: String|null, setButtonCapOne: Function, socket: Socket | null ,setReset:Function,setButtonHide1:Function}){
   
   function handleStart(){
     if (socket) {
@@ -14,8 +14,8 @@ export default function BasicButtonGroup(
       // Emit event to stop the stream
     }
     setButtonHide1(true); // Hide the video
-    setButtonRunStatus1(true); 
-    setButtonCapOne(null);
+    setButtonStatus1(true);
+  
   }
   
   function handleStream() {
@@ -24,9 +24,8 @@ export default function BasicButtonGroup(
     if (socket) {
       socket.emit('start_detection'); // Emit event to start detection
     }
-    // setButtonRunStatus1(true);
     setButtonStatus1(true); // Enable start button
-    setButtonHide1(true); // Show the video
+    setButtonHide1(false); // Show the video
   };
 
   function handleCaptureOneImage() {
@@ -48,7 +47,6 @@ export default function BasicButtonGroup(
     <ButtonGroup variant="contained" aria-label="Basic button group">
       <Button onClick={handleStart} >Start</Button>
       <Button onClick={handleStream} >Stream</Button>
-      {/* <Button onClick={handleStop} disabled={!buttonStatus1}>Pause</Button> */}
       <Button onClick={handleCaptureOneImage} >Capture One Image</Button>
       <Button onClick={handleReset} >Reset</Button>
     </ButtonGroup>

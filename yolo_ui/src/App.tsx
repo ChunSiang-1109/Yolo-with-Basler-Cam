@@ -28,7 +28,6 @@ function App() {
   const [socket, setSocketInstance] = useState<Socket | null>(null);
   //button setting
   const [buttonStatus, setButtonStatus] = useState(false);
-  const [buttonRunStatus, setButtonRunStatus] = useState(false);
   //output video stream
   const videoRef = useRef<HTMLImageElement>(null);
   //output capturing one
@@ -58,18 +57,9 @@ function App() {
   }, [buttonStatus]);
 
   useEffect(() => {
-    if (buttonRunStatus) {
-      connectSocket();
-    }
-    else {
-      disconnectSocket();
-    }
-  }, [buttonRunStatus]);
-
-  useEffect(() => {
     if (capturedImage) {
       capImageOne();
-
+ 
     }
     else {
       disconnectSocket();
@@ -79,9 +69,9 @@ function App() {
   useEffect(() => {
     if (videoRef.current) {
       if (buttonHide) {
-        videoRef.current.style.display = 'block';
-      } else {
         videoRef.current.style.display = 'none';
+      } else {
+        videoRef.current.style.display = 'block';      
       }
     }
   }, [buttonHide]);
@@ -89,22 +79,25 @@ function App() {
   const connectSocket = () => {
     const newSocket = io('http://localhost:5000');
 
-    // newSocket.on('connect', () => {
-    //   setButtonStatus(true)
-    // });
+    newSocket.on('connect', () => {
+      console.log("Frontend SocketIO connected!");
 
-    // newSocket.on('disconnect', () => {
-    //   setButtonStatus(false)
-    // });
-
-    newSocket.on('video_frame', (data) => {
-      if (videoRef.current) {
-        videoRef.current.src = `data:image/jpeg;base64,${data.frame}`;
-      }
     });
 
-    newSocket.on('detection_result', (detect_result) => {
-      setDetectionResult(detect_result.result)
+    newSocket.on('disconnect', () => {
+      console.log("Frontend SocketIO disconnected!");
+
+    });
+
+    newSocket.on('video_frame', (data,detect_result) => {
+      if (videoRef.current && !buttonHide) {
+        videoRef.current.src = `data:image/jpeg;base64,${data.frame}`;
+        setDetectionResult(data.result);
+      }else{
+        if(latestCaptureRef.current){
+          setDetectionResult(data.result);
+        }
+      }
     });
 
     setSocketInstance(newSocket);
@@ -169,7 +162,6 @@ function App() {
       <BasicButtonGroup
         buttonStatus1={buttonStatus}
         setButtonStatus1={setButtonStatus}
-        setButtonRunStatus1={setButtonRunStatus}
         buttonCapOne={capturedImage}
         setButtonCapOne={setCapturedImage}
         socket={socket}
