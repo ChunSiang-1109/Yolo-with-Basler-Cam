@@ -2,6 +2,7 @@ import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { styled } from '@mui/material/styles';
 import { io, Socket } from 'socket.io-client';
+import axios from 'axios';
 
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
@@ -27,12 +28,15 @@ function App() {
   //to start or stop 
   const [socket, setSocketInstance] = useState<Socket | null>(null);
   //button setting
-  const [buttonStatus, setButtonStatus] = useState(false);
+  const [startStatus, setStartStatus] = useState(false);
+
   //output video stream
   const videoRef = useRef<HTMLImageElement>(null);
   //output capturing one
-  const latestCaptureRef = useRef<HTMLCanvasElement>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const latestCaptureRef = useRef<HTMLImageElement>(null);
+
+  const [capturedImage, setCapturedImage] = useState(false);
+
   //output table for video stream
   const [detectionResult, setDetectionResult] = useState<any>(null);
   //button run
@@ -48,33 +52,14 @@ function App() {
   }, [socket]);
 
   useEffect(() => {
-    if (buttonStatus) {
+    if (startStatus) {
       connectSocket();
     }
     else {
       disconnectSocket();
     }
-  }, [buttonStatus]);
+  }, [startStatus]);
 
-  useEffect(() => {
-    if (capturedImage) {
-      capImageOne();
- 
-    }
-    else {
-      disconnectSocket();
-    }
-  }, [capturedImage]);
-  
-  useEffect(() => {
-    if (videoRef.current) {
-      if (buttonHide) {
-        videoRef.current.style.display = 'none';
-      } else {
-        videoRef.current.style.display = 'block';      
-      }
-    }
-  }, [buttonHide]);
 
   const connectSocket = () => {
     const newSocket = io('http://localhost:5000');
@@ -89,18 +74,40 @@ function App() {
 
     });
 
-    newSocket.on('video_frame', (data,detect_result) => {
-      if (videoRef.current && !buttonHide) {
+    newSocket.on('video_frame', (data) => {
+      if (videoRef.current) {
+        console.log("!!!!");
         videoRef.current.src = `data:image/jpeg;base64,${data.frame}`;
         setDetectionResult(data.result);
-      }else{
-        if(latestCaptureRef.current){
-          setDetectionResult(data.result);
-        }
       }
     });
 
     setSocketInstance(newSocket);
+  };
+
+  useEffect(() => {
+    if (capturedImage) {
+      console.log("Capture Image!!!");
+      fetchImage();
+      setCapturedImage(false);
+    }
+  }, [capturedImage]);
+
+  const fetchImage = async () => {
+    try {
+      const response = await axios.post('http://127.0.0.1:5000/get_last_capture_image');
+      const { latest_image, detection_result } = response.data;
+
+      // Assuming latest_image is a base64 encoded string of the image
+      if (latestCaptureRef.current) {
+        latestCaptureRef.current.src = `data:image1/jpeg;base64,${latest_image}`;
+      }
+      console.log(detection_result);
+
+      setDetectionResult(detection_result);
+    } catch (error) {
+      console.error("Error fetching the image:", error);
+    }
   };
 
   const disconnectSocket = () => {
@@ -110,62 +117,39 @@ function App() {
     }
   };
 
-  const capImageOne = () => {
-    if (videoRef.current && latestCaptureRef.current) {
-      const image = videoRef.current;
-      const latestCapture = latestCaptureRef.current;
-      const context = latestCapture.getContext("2d");
-
-      if (context) {
-        latestCapture.width = image.naturalWidth;
-        latestCapture.height = image.naturalHeight;
-
-        //draw video frame onto canvas
-        context.drawImage(image, 0, 0, latestCapture.width, latestCapture.height);
-
-        //get image data url from canvas
-        const capturedImage1 = latestCapture.toDataURL("image/jpeg");
-
-        //set the captured image
-        setCapturedImage(capturedImage1);
-      }
-    }
-  };
-
-  const set_Reset = () => {
-    if (videoRef.current) {
-      videoRef.current.src = '';
-    }
-    if (latestCaptureRef.current) {
-      const context = latestCaptureRef.current.getContext('2d');
-      if (context) {
-        context.clearRect(0, 0, latestCaptureRef.current.width, latestCaptureRef.current.height);
-      }
-    }
-    setDetectionResult(null);
-    setCapturedImage(null); // Clear captured image if needed
+  const setReset = () => {
+    // TODO:
+    // if (videoRef.current) {
+    //   videoRef.current.src = '';
+    // }
+    // if (latestCaptureRef.current) {
+    //   const context = latestCaptureRef.current.getContext('2d');
+    //   if (context) {
+    //     context.clearRect(0, 0, latestCaptureRef.current.width, latestCaptureRef.current.height);
+    //   }
+    // }
+    // setDetectionResult(null);
+    // setCapturedImage(null); // Clear captured image if needed
   };
 
   return (
     <>
       <Grid container spacing={5} justifyContent="center" alignItems="center">
         <Grid item xs={4}>
-          <WebsocketDisplay image={videoRef} />
+          <WebsocketDisplay showStreamingImage={buttonHide} image={videoRef} />
         </Grid>
         <Grid item xs={4}>
-          <ShowCaptureImageDisplay image={latestCaptureRef} />
+          <ShowCaptureImageDisplay image1={latestCaptureRef} />
         </Grid>
         <Grid item xs={4}>
-          <DetectionResultTable detectionResult={detectionResult} />
+        <DetectionResultTable detectionResult={detectionResult} />
         </Grid>
       </Grid>
       <BasicButtonGroup
-        buttonStatus1={buttonStatus}
-        setButtonStatus1={setButtonStatus}
-        buttonCapOne={capturedImage}
+        setButtonStatus1={setStartStatus}
         setButtonCapOne={setCapturedImage}
-        socket={socket}
-        setReset={set_Reset}
+        setReset={setReset}
+        StreamingEnabled={buttonHide}
         setButtonHide1={setButtonHide} />
     </>
   );

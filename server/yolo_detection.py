@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 from flask import Flask,jsonify
+from flask_cors import CORS
 from flask_socketio import SocketIO
 import cv2
 import math
@@ -18,6 +19,8 @@ import base64
 
 #to control the detection of the camera
 detection_running= False
+last_capture_frame = None
+last_detection_result = None
 mutex_lock = Lock()
 
 # Stop event for stopping the detection loop
@@ -65,6 +68,7 @@ def capture_and_store(camera, converter, storage, index, stop_event):
 def video_stream():
     print("yolo_stream_detection")
     global start_time, frame_count, detection_running,stop_event, mutex_lock
+    global last_capture_frame, last_detection_result
 
     # Initialize the Basler camera interface
     tl_factory = pylon.TlFactory.GetInstance()
@@ -97,9 +101,7 @@ def video_stream():
 
     # Table for results
     classes = det_model.names
-    name = classes.values()
-    detection_result = {class_id: 0 for class_id in name}
-    list = []  
+    name = classes.values() 
 
     try:
         while True:
@@ -112,6 +114,9 @@ def video_stream():
                 stitched_image = image_storage[0].copy()
                 results = det_model.track(stitched_image, persist=True)
            
+                detection_result = {class_id: 0 for class_id in name}
+                list = []
+
                 for result in results:
                     plot_image = result.plot()
                     
@@ -126,22 +131,24 @@ def video_stream():
 
                             if pred_class in detection_result.keys():
                                 detection_result[pred_class] += 1
-                print(detection_result)
+
+                # TODO: the fps calculation here is weird
                 frame_count += 1
                 total_time = time.time() - prev_time
+                fps = frame_count / total_time
+                print(f"FPS: {fps:.2f}")
+                frame_count = 0
+                prev_time = time.time()
+            
+                # Encode frame as JPEG
+                _, buffer = cv2.imencode('.jpg', plot_image)
+                frame_data = base64.b64encode(buffer).decode('utf-8')
 
-                if total_time >= 1.0:
-                    # fps = frame_count / total_time
-                    # print(f"FPS: {fps:.2f}")
-                    frame_count = 0
-                    prev_time = time.time()
+                # Send frame over WebSocket
+                socketio.emit('video_frame',{'frame':frame_data,'result':detection_result, })
+                # socketio.emit('detection_result',{'result':detection_result, 'frame':frame_data})
                 
-                    # Encode frame as JPEG
-                    _, buffer = cv2.imencode('.jpg', plot_image)
-                    frame_data = base64.b64encode(buffer).decode('utf-8')
-
-                    # Send frame over WebSocket
-                    socketio.emit('video_frame',{'result':detection_result, 'frame':frame_data})
+                last_capture_frame = frame_data
 
                 if stop_event.is_set():
                     socketio.emit('clear_display')
@@ -151,20 +158,34 @@ def video_stream():
         stop_event.set()
         camera1.StopGrabbing()
         camera1.Close()
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
         thread1.join()
 
     
 #app instance
 app=Flask(__name__)
+CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
-# socketio = SocketIO(app)
+
+@app.post("/get_last_capture_image")
+def send_last_capture_image():
+    global mutex_lock, last_capture_frame, last_detection_result
+    with mutex_lock:
+        try:
+            response = {
+                "latest_image": last_capture_frame,
+                "detection_result": last_detection_result
+            }
+            return jsonify(response), 200
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
 @socketio.on('connect')
 def handle_connect():
     global detection_running, mutex_lock
     mutex_lock.acquire()
-    detection_running = False
+    detection_running = True
     mutex_lock.release()
     print("Client connected")
 
