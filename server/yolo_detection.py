@@ -31,9 +31,9 @@ cap = cv2.VideoCapture(0)
 cap.set(3, 640)
 cap.set(4, 480)
 
-# FPS calculation variables
-start_time = time.time()
-frame_count = 0
+# # FPS calculation variables
+# start_time = time.time()
+# frame_count = 0
 
 def capture_image_from_basler_camera(camera, converter):
     grabResult = camera.RetrieveResult(2000, pylon.TimeoutHandling_Return)
@@ -131,12 +131,11 @@ def video_stream():
 
                             if pred_class in detection_result.keys():
                                 detection_result[pred_class] += 1
-
-                # TODO: the fps calculation here is weird
+                                
                 frame_count += 1
                 total_time = time.time() - prev_time
-                fps = frame_count / total_time
-                print(f"FPS: {fps:.2f}")
+                # fps = frame_count / total_time
+                # print(f"FPS: {fps:.2f}")
                 frame_count = 0
                 prev_time = time.time()
             
@@ -144,11 +143,14 @@ def video_stream():
                 _, buffer = cv2.imencode('.jpg', plot_image)
                 frame_data = base64.b64encode(buffer).decode('utf-8')
 
+                with mutex_lock:
+                    last_capture_frame = frame_data
+                    last_detection_result = detection_result
+
                 # Send frame over WebSocket
-                socketio.emit('video_frame',{'frame':frame_data,'result':detection_result, })
-                # socketio.emit('detection_result',{'result':detection_result, 'frame':frame_data})
-                
-                last_capture_frame = frame_data
+                socketio.emit('video_frame',{'frame':frame_data})
+                socketio.emit('detection_result',{'result':detection_result})
+                # last_capture_frame = frame_data
 
                 if stop_event.is_set():
                     socketio.emit('clear_display')
@@ -158,7 +160,6 @@ def video_stream():
         stop_event.set()
         camera1.StopGrabbing()
         camera1.Close()
-        # cv2.destroyAllWindows()
         thread1.join()
 
     
@@ -167,6 +168,20 @@ app=Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+@app.post("/get_detection_result")
+def detected_result():
+    global mutex_lock, last_capture_frame, last_detection_result
+    with mutex_lock:
+        try:
+            response = {
+                "latest_image": last_capture_frame,
+                "detection_result": last_detection_result
+            }
+            return jsonify(response), 200
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        
 @app.post("/get_last_capture_image")
 def send_last_capture_image():
     global mutex_lock, last_capture_frame, last_detection_result
@@ -180,7 +195,7 @@ def send_last_capture_image():
 
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
+        
 @socketio.on('connect')
 def handle_connect():
     global detection_running, mutex_lock
@@ -199,43 +214,6 @@ def handle_disconnect():
     mutex_lock.release()
     print("Client disconnected")
 
-@socketio.on('stop_stream')
-def handle_stop_stream():
-    global detection_running, mutex_lock
-    print("stop_stream")
-    mutex_lock.acquire()
-    detection_running = False
-    mutex_lock.release()
-    socketio.emit('start_capture')
-    print("stop_stream")
-
-@socketio.on('start_detection')
-def handle_start_detection():
-    global detection_running, mutex_lock
-    mutex_lock.acquire()
-    detection_running = True
-    mutex_lock.release()
-    print("start_detection")
-
-@socketio.on('start_capture')
-def handle_start_capture():
-    global detection_running, mutex_lock
-    mutex_lock.acquire()
-    detection_running = True
-    mutex_lock.release()
-    print("start_capture")
-
-@socketio.on('stop_detection')
-def handle_stop_detection():
-    global detection_running, stop_event, mutex_lock
-    mutex_lock.acquire()
-    detection_running = False
-    stop_event.set()
-    socketio.emit('clear_display')
-    mutex_lock.release()
-    print("stop_detection")
-
-
 if __name__ == "__main__":
 
     try:
@@ -245,5 +223,3 @@ if __name__ == "__main__":
         pass
 
     cap.release()
-    # cv2.destroyAllWindows()
-

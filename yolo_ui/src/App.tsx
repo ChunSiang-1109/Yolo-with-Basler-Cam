@@ -66,20 +66,22 @@ function App() {
 
     newSocket.on('connect', () => {
       console.log("Frontend SocketIO connected!");
-
     });
 
     newSocket.on('disconnect', () => {
       console.log("Frontend SocketIO disconnected!");
-
     });
 
     newSocket.on('video_frame', (data) => {
       if (videoRef.current) {
         console.log("!!!!");
         videoRef.current.src = `data:image/jpeg;base64,${data.frame}`;
-        setDetectionResult(data.result);
+        // setDetectionResult(data.result);
       }
+    });
+
+    newSocket.on('detection_result', (detect_result) => {
+        setDetectionResult(detect_result.result);
     });
 
     setSocketInstance(newSocket);
@@ -118,18 +120,13 @@ function App() {
   };
 
   const setReset = () => {
-    // TODO:
-    // if (videoRef.current) {
-    //   videoRef.current.src = '';
-    // }
-    // if (latestCaptureRef.current) {
-    //   const context = latestCaptureRef.current.getContext('2d');
-    //   if (context) {
-    //     context.clearRect(0, 0, latestCaptureRef.current.width, latestCaptureRef.current.height);
-    //   }
-    // }
-    // setDetectionResult(null);
-    // setCapturedImage(null); // Clear captured image if needed
+    if (videoRef.current) {
+      videoRef.current.src = '';
+    }
+    if (latestCaptureRef.current) {
+      latestCaptureRef.current.src = '';
+      }
+    setDetectionResult({});
   };
 
   return (
@@ -154,5 +151,6 @@ function App() {
     </>
   );
 }
+
 
 export default App;
