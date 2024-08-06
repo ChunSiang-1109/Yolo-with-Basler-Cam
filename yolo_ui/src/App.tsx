@@ -37,8 +37,12 @@ function App() {
 
   const [capturedImage, setCapturedImage] = useState(false);
 
-  //output table for video stream
+  //output table for streaming stream
   const [detectionResult, setDetectionResult] = useState<any>(null);
+
+  //output table for non streaming mode
+  const [detectionResultsList, setDetectionResultsList] = useState<any[]>([]);
+
   //button run
   const [buttonHide, setButtonHide] = useState<boolean>(false);
 
@@ -76,12 +80,11 @@ function App() {
       if (videoRef.current) {
         console.log("!!!!");
         videoRef.current.src = `data:image/jpeg;base64,${data.frame}`;
-        // setDetectionResult(data.result);
       }
-    });
-
-    newSocket.on('detection_result', (detect_result) => {
-        setDetectionResult(detect_result.result);
+      if(!buttonHide && videoRef.current){ //streaming mode for detection result table
+        
+        setDetectionResult(data.result);
+      }
     });
 
     setSocketInstance(newSocket);
@@ -93,6 +96,10 @@ function App() {
       fetchImage();
       setCapturedImage(false);
     }
+    // if(capturedImage && buttonHide){
+    //   console.log("Capture One Image!!!");
+      
+    // }
   }, [capturedImage]);
 
   const fetchImage = async () => {
@@ -105,8 +112,11 @@ function App() {
         latestCaptureRef.current.src = `data:image1/jpeg;base64,${latest_image}`;
       }
       console.log(detection_result);
-
+      
       setDetectionResult(detection_result);
+      if(capturedImage && buttonHide){
+        setDetectionResultsList(prevResults => [...prevResults, detection_result]);
+      }
     } catch (error) {
       console.error("Error fetching the image:", error);
     }

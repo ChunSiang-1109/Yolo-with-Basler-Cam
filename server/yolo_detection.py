@@ -76,8 +76,7 @@ def video_stream():
     if not devices:
         print("Error: No Basler camera found.")
         return
-    
-    IMAGE_PATH = Path("./data/1.jpg")
+
     models_dir = Path("./models")
     DET_MODEL_NAME = "best"
     det_model = YOLO(models_dir / f"{DET_MODEL_NAME}.pt")
@@ -102,6 +101,8 @@ def video_stream():
     # Table for results
     classes = det_model.names
     name = classes.values() 
+    detection_result = {class_id: 0 for class_id in name}
+    list = []
 
     try:
         while True:
@@ -113,9 +114,6 @@ def video_stream():
             if image_storage[0] is not None:
                 stitched_image = image_storage[0].copy()
                 results = det_model.track(stitched_image, persist=True)
-           
-                detection_result = {class_id: 0 for class_id in name}
-                list = []
 
                 for result in results:
                     plot_image = result.plot()
@@ -143,19 +141,16 @@ def video_stream():
                 _, buffer = cv2.imencode('.jpg', plot_image)
                 frame_data = base64.b64encode(buffer).decode('utf-8')
 
-                with mutex_lock:
-                    last_capture_frame = frame_data
-                    last_detection_result = detection_result
-
                 # Send frame over WebSocket
-                socketio.emit('video_frame',{'frame':frame_data})
-                socketio.emit('detection_result',{'result':detection_result})
-                # last_capture_frame = frame_data
-
+                socketio.emit('video_frame',{'frame':frame_data,'result':detection_result})
+                # socketio.emit('detection_result',{'result':detection_result})
+                last_capture_frame = frame_data
+                last_detection_result = detection_result
+                
                 if stop_event.is_set():
                     socketio.emit('clear_display')
                     break
-        detection_running=False
+        # detection_running=False
     finally:
         stop_event.set()
         camera1.StopGrabbing()
@@ -168,19 +163,19 @@ app=Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-@app.post("/get_detection_result")
-def detected_result():
-    global mutex_lock, last_capture_frame, last_detection_result
-    with mutex_lock:
-        try:
-            response = {
-                "latest_image": last_capture_frame,
-                "detection_result": last_detection_result
-            }
-            return jsonify(response), 200
+# @app.post("/get_detection_result")
+# def detected_result():
+#     global mutex_lock, last_capture_frame, last_detection_result
+#     with mutex_lock:
+#         detectedResult=last_detection_result
+#         try:
+#             detected = {
+#                 "detected_Result": detectedResult
+#             }
+#             return jsonify(detected), 200
 
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+#         except Exception as e:
+#             return jsonify({"error": str(e)}), 500
         
 @app.post("/get_last_capture_image")
 def send_last_capture_image():
